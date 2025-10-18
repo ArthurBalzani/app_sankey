@@ -18,7 +18,7 @@ st.title("Gerador de Gráfico Sankey para Frequência de Palavras")
 
 # Function to extract significant words from text
 @st.cache_data
-def extract_words(text):
+def extract_words(text, custom_stop_words=None):
     if pd.isna(text):
         return []
     
@@ -32,6 +32,11 @@ def extract_words(text):
                                'muito', 'muita', 'muitos', 'muitas', 'bem', 'mal',
                                'sim', 'não', 'pelo', 'pela', 'pelos', 'pelas'}
         stop_words.update(additional_stop_words)
+        
+        # Add custom stop words from user input if available
+        if custom_stop_words:
+            stop_words.update(custom_stop_words)
+            
     except:
         stop_words = set()  # If it fails, use an empty set
     
@@ -52,10 +57,10 @@ def extract_words(text):
 
 # Function to create Sankey diagram
 def create_sankey_diagram(texts, n_words=20, colorscale=None, main_node_color="#1f77b4", 
-                         opacity=0.8, height=600):
+                         opacity=0.8, height=600, custom_stop_words=None):
     all_words = []
     for text in texts:
-        all_words.extend(extract_words(text))
+        all_words.extend(extract_words(text, custom_stop_words))
     
     # Count frequency
     counter = Counter(all_words)
@@ -302,6 +307,24 @@ if uploaded_file is not None:
             # Chart parameters
             st.subheader("Opções do gráfico")
             
+            # Palavras para filtrar
+            with st.expander("Filtrar palavras irrelevantes", expanded=False):
+                st.markdown("**Adicione palavras que você deseja excluir da análise:**")
+                user_stop_words = st.text_area(
+                    "Digite as palavras separadas por vírgula, espaço ou nova linha:",
+                    value="",
+                    height=100,
+                    help="Estas palavras serão adicionadas à lista de stopwords e não aparecerão no gráfico"
+                )
+                
+                # Processar as palavras inseridas pelo usuário
+                if user_stop_words:
+                    # Separar palavras por vírgula, espaço ou quebra de linha
+                    custom_stop_words = set(word.strip().lower() for word in re.split(r'[,\s]+', user_stop_words) if word.strip())
+                    st.info(f"Serão ignoradas {len(custom_stop_words)} palavras personalizadas: {', '.join(sorted(custom_stop_words))}")
+                else:
+                    custom_stop_words = set()
+            
             col1, col2 = st.columns(2)
             with col1:
                 n_words = st.slider("Número de palavras mais frequentes:", 5, 50, 20)
@@ -372,7 +395,8 @@ if uploaded_file is not None:
                         colorscale=colorscale,
                         main_node_color=main_node_color,
                         opacity=opacity,
-                        height=chart_height
+                        height=chart_height,
+                        custom_stop_words=custom_stop_words if 'custom_stop_words' in locals() else None
                     )
                     
                     if fig is not None:
@@ -382,7 +406,7 @@ if uploaded_file is not None:
                         # Display word count
                         all_words = []
                         for text in texts:
-                            all_words.extend(extract_words(text))
+                            all_words.extend(extract_words(text, custom_stop_words if 'custom_stop_words' in locals() else None))
                         counter = Counter(all_words)
                         
                         st.subheader("Frequência de palavras")
