@@ -1,49 +1,49 @@
-# Aplicação de Gráfico Sankey para Análise de Frequência de Palavras
+# Sankey Diagram Application for Word Frequency Analysis
 
-Esta aplicação permite carregar um arquivo CSV contendo perguntas e respostas, e gerar um gráfico de Sankey para visualizar a frequência das palavras mais comuns em cada pergunta.
+This application allows you to upload a CSV file containing questions and answers, and generate a Sankey diagram to visualize the frequency of the most common words in each question.
 
-## Funcionalidades
+## Features
 
-- Upload de arquivos CSV
-- Seleção de coluna (pergunta) para análise
-- Ajuste do número de palavras mais frequentes a serem exibidas
-- Visualização do gráfico de Sankey com a frequência de palavras
-- Tabela com a contagem de palavras
+- CSV file upload
+- Selection of column (question) for analysis
+- Adjustment of the number of most frequent words to display
+- Sankey diagram visualization of word frequency
+- Table with word count
 
-## Requisitos
+## Requirements
 
-- Python 3.8 ou superior
-- Dependências listadas em `requirements.txt`
+- Python 3.8 or higher
+- Dependencies listed in `requirements.txt`
 
-## Como instalar
+## How to Install
 
-1. Clone ou baixe este repositório
-2. Instale as dependências:
+1. Clone or download this repository
+2. Install the dependencies:
 
 ```
 pip install -r requirements.txt
 ```
 
-3. Execute a aplicação:
+3. Run the application:
 
 ```
 streamlit run app.py
 ```
 
-## Como usar
+## How to Use
 
-1. Após iniciar a aplicação, faça upload de um arquivo CSV
-2. As duas primeiras colunas do arquivo serão ignoradas
-3. Selecione a coluna (pergunta) que deseja analisar
-4. Ajuste o número de palavras mais frequentes a serem exibidas
-5. Clique em "Gerar Gráfico de Sankey"
+1. After starting the application, upload a CSV file
+2. The first two columns of the file will be ignored
+3. Select the column (question) you want to analyze
+4. Adjust the number of most frequent words to display
+5. Click on "Generate Sankey Diagram"
 
-## Formato do arquivo CSV
+## CSV File Format
 
-O arquivo CSV deve ter pelo menos 3 colunas. As duas primeiras serão ignoradas, e as demais serão consideradas como perguntas para análise.
+The CSV file must have at least 3 columns. The first two will be ignored, and the rest will be considered as questions for analysis.
 
-## Observações
+## Notes
 
-- Palavras muito curtas (menos de 3 letras) são automaticamente filtradas
-- Palavras comuns (stop words) como artigos e preposições são removidas da análise
-- A análise é realizada apenas no texto das respostas na coluna selecionada
+- Very short words (less than 3 letters) are automatically filtered out
+- Common words (stop words) such as articles and prepositions are removed from the analysis
+- The analysis is performed only on the text of the responses in the selected column
