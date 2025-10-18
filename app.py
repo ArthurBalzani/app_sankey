@@ -168,14 +168,14 @@ uploaded_file = st.file_uploader("Faça upload do arquivo CSV", type=['csv'])
 if uploaded_file is not None:
     # Load data
     try:
-        # Try different parsing options to handle problematic CSVs
-        st.info("Tentando processar o arquivo...")
-        
         # User options
         with st.expander("Opções avançadas de importação"):
             delimiter = st.text_input("Delimitador", value=";")  # Semicolon as default
             encoding = st.selectbox("Encoding", ["utf-8", "latin1", "ISO-8859-1", "cp1252"], index=0)
             error_bad_lines = st.checkbox("Ignorar linhas problemáticas", value=True)
+            
+        # Show processing message
+        processing_info = st.info("Tentando processar o arquivo...")
             
         # Try to load the file with the specified options
         if error_bad_lines:
@@ -196,6 +196,8 @@ if uploaded_file is not None:
                 quoting=3  # csv.QUOTE_NONE - Completely disable quotes
             )
         
+        # Remove processing message and show success
+        processing_info.empty()
         st.success("Arquivo carregado com sucesso!")
         
         # Display information about the dataset
