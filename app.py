@@ -5,6 +5,7 @@ Supports uploading multiple CSV files and selecting several question columns.
 The Sankey shows questions (left) → unique words (right), with shared word nodes.
 """
 
+from collections import Counter
 from typing import Dict, List, Tuple
 
 import pandas as pd
@@ -41,7 +42,7 @@ def _question_options(
     Build selectable questions across files.
 
     Returns list of (option_id, file_name, column_name).
-    option_id is unique for widgets; display uses file + column when multi-file.
+    option_id is always unique for widgets (includes file when multi-file).
     """
     multi_file = len(datasets) > 1
     options: List[Tuple[str, str, str]] = []
@@ -53,10 +54,23 @@ def _question_options(
     return options
 
 
-def _display_label(opt_id: str, file_name: str, column: str, multi_file: bool) -> str:
-    if multi_file:
-        return f"{file_name} → {column}"
-    return column
+def _question_labels(
+    options: List[Tuple[str, str, str]],
+) -> Dict[str, str]:
+    """
+    Map option_id → display/Sankey label.
+
+    Default: column name only. If the same column name appears in more than
+    one file, append a minimal file suffix for those entries only.
+    """
+    col_counts = Counter(col for _, _, col in options)
+    labels: Dict[str, str] = {}
+    for opt_id, file_name, column in options:
+        if col_counts[column] > 1:
+            labels[opt_id] = f"{column} ({file_name})"
+        else:
+            labels[opt_id] = column
+    return labels
 
 
 uploaded_files = st.file_uploader(
@@ -230,7 +244,6 @@ if uploaded_files:
         # Analysis — multi question selection
         # ====================================================================
         options = _question_options(datasets)
-        multi_file = len(datasets) > 1
 
         if not options:
             st.warning(
@@ -240,10 +253,7 @@ if uploaded_files:
             )
         else:
             id_to_meta = {opt_id: (fname, col) for opt_id, fname, col in options}
-            label_by_id = {
-                opt_id: _display_label(opt_id, fname, col, multi_file)
-                for opt_id, fname, col in options
-            }
+            label_by_id = _question_labels(options)
 
             default_selection = [options[0][0]]
             selected_ids = st.multiselect(
