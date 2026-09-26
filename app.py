@@ -23,6 +23,19 @@ from src import (
 st.set_page_config(
     page_title=config.PAGE_TITLE,
     layout=config.PAGE_LAYOUT,
+    initial_sidebar_state="collapsed",
+)
+
+st.markdown(
+    """
+    <style>
+        [data-testid="stSidebar"],
+        [data-testid="stSidebarCollapsedControl"] {
+            display: none !important;
+        }
+    </style>
+    """,
+    unsafe_allow_html=True,
 )
 
 st.title("Gerador de Gráfico Sankey para Frequência de Palavras")
@@ -445,16 +458,3 @@ with st.expander("❓ Como usar esta aplicação"):
     - Palavras comuns (artigos, preposições, etc)
     """
     )
-
-st.sidebar.markdown("---")
-st.sidebar.markdown(
-    """
-
-    **Desenvolvido com:**
-    - [Streamlit](https://streamlit.io)
-    - [Plotly](https://plotly.com)
-    - [NLTK](https://www.nltk.org)
-    - [Pandas](https://pandas.pydata.org)
-
-"""
-)
