@@ -49,9 +49,9 @@ Thumbs.db
 .env.local
 .env.development.local
 .env.test.local
-.env.production.local
-.worktrees/
 <<<<<<< HEAD
 
 =======
 >>>>>>> cursor/sankey-multi-questions-80d2
+.env.production.local
+.worktrees/
