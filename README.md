@@ -2,6 +2,10 @@
 
 A Streamlit application for visual analysis of word frequency using Sankey diagrams. This application allows you to upload a CSV file containing questions and answers, and generate a Sankey diagram to visualize the frequency of the most common words in each column.
 
+## 🌐 Live app
+
+**Use the application online:** [https://agsankey.streamlit.app/](https://agsankey.streamlit.app/)
+
 ## ✨ Features
 
 - 📤 CSV file upload with validation

@@ -1,5 +1,11 @@
 # ✅ Quick Start Guide
 
+## 🌐 Live app
+
+Prefer not to run locally? Open the deployed app:
+
+**[https://agsankey.streamlit.app/](https://agsankey.streamlit.app/)**
+
 ## 🚀 How to Get Started
 
 ### 1️⃣ Install Dependencies (if you haven't already)
@@ -95,7 +101,9 @@ pytest tests/
 
 ## 🚢 Deployment
 
-Your application is ready for:
+**Production (Streamlit Community Cloud):** [https://agsankey.streamlit.app/](https://agsankey.streamlit.app/)
+
+The app deploys from this GitHub repository. Other options:
 
 - **Streamlit Cloud**: Connect GitHub repo → Automatic deployment
 - **Heroku**: `git push heroku main`
