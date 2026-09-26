@@ -14,7 +14,8 @@ from src.text_processing import (
 from src.visualization import (
     create_sankey_diagram,
     create_word_frequency_dataframe,
-    get_color_palette
+    get_color_palette,
+    build_question_word_frequencies,
 )
 
 __all__ = [
@@ -26,5 +27,6 @@ __all__ = [
     'normalize_text',
     'create_sankey_diagram',
     'create_word_frequency_dataframe',
-    'get_color_palette'
+    'get_color_palette',
+    'build_question_word_frequencies',
 ]
