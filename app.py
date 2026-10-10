@@ -12,11 +12,21 @@ import pandas as pd
 import streamlit as st
 
 import config
+from src.color_utils import convert_color_to_hex
 from src import (
-    create_sankey_diagram,
+    apply_native_label_styles,
+    build_sankey_diagram,
     create_word_frequency_dataframe,
+    ensure_style_state,
     get_color_palette,
+    needs_pinned_node_positions,
+    make_content_key,
     parse_custom_stopwords,
+    reset_style_customizations,
+    node_id_for_question,
+    resolve_plotly_node_colors,
+    resolve_plotly_link_colors,
+    default_question_color_for_index,
 )
 
 
@@ -84,6 +94,126 @@ def _question_labels(
         else:
             labels[opt_id] = column
     return labels
+
+
+def _build_question_texts(
+    selected_ids: List[str],
+    id_to_meta: Dict[str, Tuple[str, str]],
+    label_by_id: Dict[str, str],
+    datasets: Dict[str, pd.DataFrame],
+) -> Dict[str, List[str]]:
+    question_texts: Dict[str, List[str]] = {}
+    used_labels: Dict[str, int] = {}
+    for opt_id in selected_ids:
+        file_name, column = id_to_meta[opt_id]
+        label = label_by_id[opt_id]
+        if label in used_labels:
+            used_labels[label] += 1
+            label = f"{label} ({used_labels[label]})"
+        else:
+            used_labels[label] = 1
+        series = datasets[file_name][column]
+        question_texts[label] = series.dropna().tolist()
+    return question_texts
+
+
+def _truncate_label(label: str, max_len: int = 48) -> str:
+    if len(label) <= max_len:
+        return label
+    return f"{label[: max_len - 1]}…"
+
+
+def _sankey_labels_for_selection(
+    selected_ids: List[str],
+    label_by_id: Dict[str, str],
+) -> List[str]:
+    labels: List[str] = []
+    used: Dict[str, int] = {}
+    for opt_id in selected_ids:
+        label = label_by_id[opt_id]
+        if label in used:
+            used[label] += 1
+            label = f"{label} ({used[label]})"
+        else:
+            used[label] = 1
+        labels.append(label)
+    return labels
+
+
+def _render_sankey_chart(
+    question_texts: Dict[str, List[str]],
+    *,
+    n_words: int,
+    colorscale_name: str,
+    invert: bool,
+    opacity: float,
+    chart_height: int,
+    custom_stop_words: List[str],
+    style_state: dict,
+) -> bool:
+    colorscale = get_color_palette(colorscale_name, invert)
+    stop_words = set(custom_stop_words) if custom_stop_words else None
+
+    pin_positions = needs_pinned_node_positions(style_state)
+
+    draft = build_sankey_diagram(
+        question_texts,
+        n_words=n_words,
+        colorscale=colorscale,
+        opacity=opacity,
+        height=chart_height,
+        custom_stop_words=stop_words,
+        hide_native_labels=False,
+        pin_node_positions=pin_positions,
+    )
+    if draft is None:
+        st.warning("Não foi possível extrair palavras significativas dos textos.")
+        return False
+
+    node_colors = resolve_plotly_node_colors(
+        state=style_state,
+        question_labels=draft["questions"],
+        word_labels=draft["words"],
+        palette_colors=colorscale,
+        opacity=opacity,
+        word_totals=draft["word_totals"],
+    )
+    sankey_trace = draft["figure"].data[0]
+    link_colors = resolve_plotly_link_colors(
+        state=style_state,
+        question_labels=draft["questions"],
+        link_sources=list(sankey_trace.link.source),
+        link_targets=list(sankey_trace.link.target),
+        word_labels=draft["words"],
+        palette_colors=colorscale,
+        word_totals=draft["word_totals"],
+        opacity=opacity,
+    )
+    result = build_sankey_diagram(
+        question_texts,
+        n_words=n_words,
+        colorscale=colorscale,
+        opacity=opacity,
+        height=chart_height,
+        custom_stop_words=stop_words,
+        hide_native_labels=False,
+        node_colors=node_colors,
+        link_colors=link_colors,
+        pin_node_positions=pin_positions,
+    )
+    assert result is not None
+    st.session_state["sankey_nodes"] = result["nodes"]
+    apply_native_label_styles(result["figure"], result["nodes"], style_state)
+    st.plotly_chart(result["figure"], use_container_width=True)
+
+    st.subheader("Frequência de palavras")
+    freq_df = create_word_frequency_dataframe(
+        question_texts,
+        n_words=n_words,
+        custom_stop_words=stop_words,
+    )
+    st.dataframe(freq_df, use_container_width=True)
+    return True
 
 
 uploaded_files = st.file_uploader(
@@ -211,25 +341,12 @@ if uploaded_files:
         else:
             st.write(f"Mostrando {num_rows} de {preview_df.shape[0]} linhas.")
 
-        view_mode = st.radio(
-            "Modo de visualização:", ("Compacto", "Expandido"), horizontal=True
+        st.dataframe(
+            data_to_show,
+            use_container_width=True,
+            height=min(400, 35 * len(data_to_show) + 38),
+            hide_index=False,
         )
-        if view_mode == "Compacto":
-            st.dataframe(
-                data_to_show,
-                use_container_width=True,
-                height=min(400, 35 * len(data_to_show) + 38),
-                hide_index=False,
-            )
-        else:
-            st.write(
-                "Modo expandido (use a barra de rolagem para ver todas as colunas):"
-            )
-            st.write(
-                data_to_show.style.set_properties(
-                    subset=None, **{"text-align": "left"}
-                )
-            )
 
         with st.expander("Visualizar linha específica em detalhe"):
             if preview_df.shape[0] > 0:
@@ -282,108 +399,249 @@ if uploaded_files:
 
             st.subheader("Opções do gráfico")
 
+            custom_stop_words: List[str] = []
             with st.expander("Filtrar palavras irrelevantes", expanded=False):
-                st.markdown(
-                    "**Adicione palavras que você deseja excluir da análise:**"
-                )
                 user_stop_words = st.text_area(
-                    "Digite as palavras separadas por vírgula, espaço ou nova linha:",
+                    "Palavras a ignorar (vírgula, espaço ou linha)",
                     value="",
                     height=100,
-                    help="Estas palavras serão adicionadas à lista de stopwords",
+                    label_visibility="collapsed",
                 )
                 custom_stop_words = parse_custom_stopwords(user_stop_words)
                 if custom_stop_words:
-                    st.info(
-                        f"Serão ignoradas {len(custom_stop_words)} palavras personalizadas"
+                    st.caption(
+                        f"{len(custom_stop_words)} palavra(s) personalizada(s) ignorada(s)."
                     )
 
-            col1, col2 = st.columns(2)
+            n_words = st.slider(
+                "Palavras mais frequentes no gráfico",
+                min_value=config.MIN_N_WORDS,
+                max_value=config.MAX_N_WORDS,
+                value=config.DEFAULT_N_WORDS,
+            )
 
-            with col1:
-                n_words = st.slider(
-                    "Número de palavras mais frequentes:",
-                    min_value=config.MIN_N_WORDS,
-                    max_value=config.MAX_N_WORDS,
-                    value=config.DEFAULT_N_WORDS,
-                )
-                invert_colors = st.checkbox("Inverter ordem das cores", value=False)
-                chart_height = st.slider(
-                    "Altura do gráfico (px):",
-                    min_value=config.MIN_CHART_HEIGHT,
-                    max_value=config.MAX_CHART_HEIGHT,
-                    value=config.DEFAULT_CHART_HEIGHT,
-                    step=config.SLIDER_HEIGHT_STEP,
-                )
+            color_palette = config.DEFAULT_COLOR_PALETTE
+            invert_colors = False
+            opacity = config.DEFAULT_OPACITY
+            chart_height = config.DEFAULT_CHART_HEIGHT
 
-            with col2:
-                color_palette = st.selectbox(
-                    "Esquema de cores:",
-                    options=config.COLOR_PALETTES,
-                    index=config.COLOR_PALETTES.index(config.DEFAULT_COLOR_PALETTE),
-                )
-                main_node_color = st.color_picker(
-                    "Cor do nó da pergunta (origem):",
-                    config.DEFAULT_MAIN_NODE_COLOR,
-                )
-                opacity = st.slider(
-                    "Opacidade das ligações:",
-                    0.3,
-                    1.0,
-                    config.DEFAULT_OPACITY,
-                    0.1,
-                )
+            content_key = make_content_key(
+                file_names=list(datasets.keys()),
+                selected_question_ids=list(selected_ids),
+                n_words=n_words,
+                stopwords=sorted(custom_stop_words) if custom_stop_words else [],
+            )
+            prior_style = st.session_state.get("sankey_style")
+            prior_content_key = (
+                prior_style.get("content_key") if isinstance(prior_style, dict) else None
+            )
+            style_state = ensure_style_state(prior_style, content_key)
+            if prior_content_key is not None and prior_content_key != content_key:
+                st.session_state.pop("sankey_last", None)
+                st.session_state.pop("sankey_nodes", None)
+            st.session_state["sankey_style"] = style_state
+
+            style_widget_gen = st.session_state.get("sankey_style_widget_gen", 0)
+            style_widget_key = f"{content_key}_{style_widget_gen}"
+
+            per_q_colors: Dict[str, str] = {}
+            label_font = style_state["defaults"]["questions"]["font"]
+            label_size = int(style_state["defaults"]["questions"]["size"])
+            label_color = style_state["defaults"]["questions"]["color"]
 
             if not selected_ids:
                 st.info("Selecione pelo menos uma pergunta para gerar o gráfico.")
-            elif st.button("Gerar Gráfico de Sankey", use_container_width=True):
-                with st.spinner("Gerando gráfico..."):
-                    question_texts: Dict[str, List[str]] = {}
-                    used_labels: Dict[str, int] = {}
+            else:
+                st.divider()
+                st.markdown("### Estilo do Sankey")
 
-                    for opt_id in selected_ids:
-                        file_name, column = id_to_meta[opt_id]
-                        label = label_by_id[opt_id]
-                        # Ensure unique left-node labels if collision
-                        if label in used_labels:
-                            used_labels[label] += 1
-                            label = f"{label} ({used_labels[label]})"
-                        else:
-                            used_labels[label] = 1
+                _pal_key = f"sankey_palette_{style_widget_key}"
+                _inv_key = f"sankey_invert_{style_widget_key}"
+                _op_key = f"sankey_opacity_{style_widget_key}"
+                _ht_key = f"sankey_height_{style_widget_key}"
+                if _pal_key in st.session_state:
+                    color_palette = st.session_state[_pal_key]
+                if _inv_key in st.session_state:
+                    invert_colors = bool(st.session_state[_inv_key])
+                if _op_key in st.session_state:
+                    opacity = float(st.session_state[_op_key])
+                if _ht_key in st.session_state:
+                    chart_height = int(st.session_state[_ht_key])
+                palette_for_defaults = get_color_palette(
+                    color_palette, invert_colors
+                )
+                sankey_question_labels = _sankey_labels_for_selection(
+                    selected_ids, label_by_id
+                )
 
-                        series = datasets[file_name][column]
-                        question_texts[label] = series.dropna().tolist()
-
-                    colorscale = get_color_palette(color_palette, invert_colors)
-
-                    fig = create_sankey_diagram(
-                        question_texts,
-                        n_words=n_words,
-                        colorscale=colorscale,
-                        main_node_color=main_node_color,
-                        opacity=opacity,
-                        height=chart_height,
-                        custom_stop_words=(
-                            custom_stop_words if custom_stop_words else None
-                        ),
+                n_q = len(sankey_question_labels)
+                question_node_color = convert_color_to_hex(
+                    style_state.get(
+                        "question_node_color", config.DEFAULT_QUESTION_NODE_COLOR
                     )
-
-                    if fig is not None:
-                        st.plotly_chart(fig, use_container_width=True)
-
-                        st.subheader("Frequência de palavras")
-                        freq_df = create_word_frequency_dataframe(
-                            question_texts,
-                            n_words=n_words,
-                            custom_stop_words=(
-                                custom_stop_words if custom_stop_words else None
+                )
+                per_q_colors: Dict[str, str] = {}
+                with st.expander(
+                    "Perguntas e ligações",
+                    expanded=(n_q >= 2),
+                ):
+                    if n_q == 1:
+                        st.caption(
+                            "Cor do nó da pergunta; com uma pergunta as ligações usam a paleta. "
+                            "Cores por pergunta quando há mais de uma."
+                        )
+                        question_node_color = st.color_picker(
+                            "Cor do nó da pergunta",
+                            question_node_color,
+                            key=f"sankey_q_link_{style_widget_key}",
+                            help=(
+                                "Cor do nó da pergunta; com uma pergunta as ligações usam a paleta. "
+                                "Cores por pergunta quando há mais de uma."
                             ),
                         )
-                        st.dataframe(freq_df, use_container_width=True)
                     else:
-                        st.warning(
-                            "Não foi possível extrair palavras significativas dos textos."
+                        st.caption(
+                            "Escolha uma cor por pergunta; cada ligação usa a cor da pergunta de origem."
                         )
+                        per_q_colors = dict(
+                            style_state.get("question_node_colors") or {}
+                        )
+                        for i, qlabel in enumerate(sankey_question_labels):
+                            raw = per_q_colors.get(qlabel)
+                            if raw is None:
+                                default_q = default_question_color_for_index(
+                                    i, n_q, palette_for_defaults
+                                )
+                            else:
+                                default_q = convert_color_to_hex(raw)
+                            nid = node_id_for_question(qlabel)
+                            per_q_colors[qlabel] = st.color_picker(
+                                f"Cor da pergunta e das ligações — {_truncate_label(qlabel)}",
+                                default_q,
+                                key=f"sankey_q_link_{nid}_{style_widget_key}",
+                                help="Cor do nó da pergunta e de todas as fitas que saem dela.",
+                            )
+
+                with st.expander("Rótulos", expanded=False):
+                    label_font = st.selectbox(
+                        "Fonte dos rótulos",
+                        options=config.SANKEY_FONT_FAMILIES,
+                        index=config.SANKEY_FONT_FAMILIES.index(
+                            style_state["defaults"]["questions"]["font"]
+                        )
+                        if style_state["defaults"]["questions"]["font"]
+                        in config.SANKEY_FONT_FAMILIES
+                        else 0,
+                        key=f"sankey_label_font_{style_widget_key}",
+                        help="Mesma fonte e tamanho para perguntas e palavras (limite do Plotly).",
+                    )
+                    label_size = st.slider(
+                        "Tamanho dos rótulos",
+                        min_value=8,
+                        max_value=32,
+                        value=int(style_state["defaults"]["questions"]["size"]),
+                        key=f"sankey_label_size_{style_widget_key}",
+                    )
+                    label_color = st.color_picker(
+                        "Cor do texto dos rótulos",
+                        style_state["defaults"]["questions"]["color"],
+                        key=f"sankey_label_color_{style_widget_key}",
+                    )
+
+                with st.expander("Layout e paleta", expanded=False):
+                    color_palette = st.selectbox(
+                        "Paleta Plotly (nós de palavra e cores padrão)",
+                        options=config.COLOR_PALETTES,
+                        index=config.COLOR_PALETTES.index(
+                            config.DEFAULT_COLOR_PALETTE
+                        ),
+                        key=f"sankey_palette_{style_widget_key}",
+                    )
+                    invert_colors = st.checkbox(
+                        "Inverter ordem da paleta",
+                        value=False,
+                        key=f"sankey_invert_{style_widget_key}",
+                    )
+                    opacity = st.slider(
+                        "Opacidade das ligações",
+                        0.3,
+                        1.0,
+                        config.DEFAULT_OPACITY,
+                        0.1,
+                        key=f"sankey_opacity_{style_widget_key}",
+                    )
+                    chart_height = st.slider(
+                        "Altura do gráfico (px)",
+                        min_value=config.MIN_CHART_HEIGHT,
+                        max_value=config.MAX_CHART_HEIGHT,
+                        value=config.DEFAULT_CHART_HEIGHT,
+                        step=config.SLIDER_HEIGHT_STEP,
+                        key=f"sankey_height_{style_widget_key}",
+                    )
+
+                label_fields = {
+                    "font": label_font,
+                    "size": label_size,
+                    "color": label_color,
+                }
+                style_state["defaults"]["questions"] = dict(label_fields)
+                style_state["defaults"]["words"] = dict(label_fields)
+                if n_q == 1:
+                    style_state["question_node_color"] = question_node_color
+                    style_state["question_node_colors"] = {}
+                else:
+                    style_state["question_node_colors"] = per_q_colors
+                    style_state["question_node_color"] = next(
+                        iter(per_q_colors.values())
+                    )
+                st.session_state["sankey_style"] = style_state
+
+                btn_gen, btn_reset = st.columns([3, 1])
+                with btn_gen:
+                    generate = st.button(
+                        "Gerar gráfico de Sankey",
+                        type="primary",
+                        use_container_width=True,
+                    )
+                with btn_reset:
+                    if st.button("Resetar estilo", use_container_width=True):
+                        st.session_state["sankey_style"] = (
+                            reset_style_customizations(style_state)
+                        )
+                        st.session_state["sankey_style_widget_gen"] = (
+                            style_widget_gen + 1
+                        )
+                        st.rerun()
+
+                if generate:
+                    question_texts = _build_question_texts(
+                        selected_ids, id_to_meta, label_by_id, datasets
+                    )
+                    st.session_state["sankey_last"] = {
+                        "question_texts": question_texts,
+                        "n_words": n_words,
+                        "colorscale_name": color_palette,
+                        "invert": invert_colors,
+                        "opacity": opacity,
+                        "height": chart_height,
+                        "custom_stop_words": sorted(custom_stop_words)
+                        if custom_stop_words
+                        else [],
+                    }
+
+            last = st.session_state.get("sankey_last")
+            if last and selected_ids:
+                with st.spinner("Atualizando gráfico..."):
+                    _render_sankey_chart(
+                        last["question_texts"],
+                        n_words=last["n_words"],
+                        colorscale_name=last["colorscale_name"],
+                        invert=last["invert"],
+                        opacity=last["opacity"],
+                        chart_height=last["height"],
+                        custom_stop_words=last["custom_stop_words"],
+                        style_state=st.session_state["sankey_style"],
+                    )
 
     except Exception as e:
         st.error(f"Erro ao processar o arquivo: {e}")
@@ -428,33 +686,39 @@ else:
     with st.expander("ℹ️ Dicas para formatação do CSV"):
         st.markdown(
             """
-        1. Não use o caractere delimitador (padrão: `;`) dentro dos campos
-        2. Verifique se todas as linhas têm o mesmo número de colunas
-        3. As duas primeiras colunas serão ignoradas na análise
-        4. Use ponto e vírgula (`;`) como separador padrão
-        5. Você pode enviar vários arquivos e combinar perguntas no mesmo gráfico
+        - **Delimitador:** padrão `;` (ponto e vírgula). Não coloque esse caractere dentro dos textos das respostas.
+        - **Colunas:** todas as linhas devem ter o mesmo número de colunas.
+        - **Metadados:** as **duas primeiras colunas** de cada arquivo são ignoradas na análise (ex.: id e data); a partir da 3ª coluna entram as **perguntas** (cabeçalho = enunciado).
+        - **Vários arquivos:** envie um ou mais CSVs e selecione perguntas de qualquer um no mesmo gráfico.
+        - **Encoding:** se o upload falhar, use *Opções avançadas de importação* para testar latin1, ISO-8859-1 ou cp1252.
+        - **Modelo:** use o botão de download acima se precisar de um exemplo válido.
         """
         )
 
 with st.expander("❓ Como usar esta aplicação"):
     st.markdown(
         """
-    ### Passos:
-    1. Faça upload de **um ou mais** arquivos CSV
-    2. As 2 primeiras colunas de cada arquivo serão ignoradas
-    3. Selecione uma ou mais perguntas (colunas) para análise
-    4. Ajuste as opções do gráfico conforme desejado
-    5. Clique em **'Gerar Gráfico de Sankey'**
+    ### Passos
+    1. Envie **um ou mais** arquivos CSV.
+    2. Ignore mentalmente as **2 primeiras colunas** (metadados); escolha **perguntas** (colunas) para analisar.
+    3. Ajuste filtros (top N palavras, stopwords extras) e **Estilo do Sankey** (rótulos, cores, paleta, layout).
+    4. Clique em **Gerar Gráfico de Sankey**.
+    5. Depois de gerar, mudar fonte, cores ou paleta **atualiza o gráfico** sem gerar de novo.
 
-    ### O que o gráfico mostra:
-    - **Esquerda**: uma pergunta selecionada por nó
-    - **Direita**: palavras únicas (se a mesma palavra aparece em várias perguntas, há um único nó)
-    - **Fluxo**: frequência da palavra **naquela** pergunta
-    - **Espessura**: proporcional à frequência
-    - **Cores**: com 1 pergunta, pela frequência da palavra; com várias, pela pergunta de origem
+    ### Estilo e cores
+    - **Rótulos (Plotly):** uma fonte, um tamanho e uma cor de texto para todos os nós.
+    - **1 pergunta:** cor do nó da pergunta em *Perguntas e ligações*; **ligações** seguem a paleta por frequência das palavras.
+    - **2+ perguntas:** uma cor por pergunta — vale para o **nó** e para as **ligações** que saem dela.
+    - **Nós de palavra:** cores automáticas pela paleta Plotly (sem controle separado de cor).
 
-    ### Filtros automáticos:
-    - Palavras muito curtas (< 3 letras)
-    - Palavras comuns (artigos, preposições, etc)
+    ### Gráfico
+    - **Esquerda:** cada pergunta selecionada vira um nó.
+    - **Direita:** palavras únicas (a mesma palavra em várias perguntas compartilha um nó).
+    - **Ligações:** espessura = frequência da palavra **naquela** pergunta.
+    - **Arrastar nós:** o Plotly permite reposicionar nós no diagrama (só nesta sessão).
+
+    ### Filtros de texto
+    - Palavras com menos de 3 letras e stopwords em português (lista padrão).
+    - Lista extra de palavras a ignorar, se quiser, antes de gerar.
     """
     )
