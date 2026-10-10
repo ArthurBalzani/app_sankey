@@ -151,5 +151,4 @@ id;date;What do you think?;How was the experience?
 - **streamlit**: Web framework for creating data applications
 - **pandas**: Data manipulation and analysis
 - **plotly**: Interactive visualizations
-- **nltk**: Natural language processing
 - **matplotlib**: Color utilities

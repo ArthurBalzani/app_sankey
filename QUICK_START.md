@@ -83,7 +83,6 @@ pytest tests/
 - 📖 [Streamlit Docs](https://docs.streamlit.io)
 - 📊 [Plotly Docs](https://plotly.com/python)
 - 🐼 [Pandas Docs](https://pandas.pydata.org/docs)
-- 🔤 [NLTK Docs](https://www.nltk.org)
 
 ## ❓ Frequently Asked Questions
 
