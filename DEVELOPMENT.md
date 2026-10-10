@@ -124,7 +124,7 @@ from src.visualization import create_new_chart
 
 if st.button("Generate New Chart"):
     fig = create_new_chart(texts)
-    st.plotly_chart(fig, use_container_width=True)
+    st.plotly_chart(fig, width="stretch")
 ```
 
 ## 🚀 Deployment

@@ -135,7 +135,7 @@ def test_expanded_display_styler_when_jinja2_available():
     from pandas.compat._optional import import_optional_dependency
 
     if not import_optional_dependency("jinja2", errors="ignore"):
-        pytest.skip("pandas Styler needs jinja2>=3.1.5")
+        pytest.skip("pandas Styler needs jinja2>=3.1.6")
     df = pd.DataFrame({"col": [1, 2]})
     out = expanded_dataframe_display(df, has_jinja2=True)
     assert out.__class__.__name__ == "Styler"
