@@ -6,11 +6,11 @@ import re
 import unicodedata
 from collections import Counter
 from typing import List, Set, Optional
-import nltk
-from nltk.corpus import stopwords
+
 import streamlit as st
 
 from config import MIN_WORD_LENGTH, ADDITIONAL_STOP_WORDS
+from src.portuguese_stopwords import PORTUGUESE_STOPWORDS
 
 
 def get_portuguese_stopwords(custom_stop_words: Optional[Set[str] | frozenset[str]] = None) -> Set[str]:
@@ -23,18 +23,12 @@ def get_portuguese_stopwords(custom_stop_words: Optional[Set[str] | frozenset[st
     Returns:
         Set of all stopwords (default + custom).
     """
-    try:
-        nltk.download('stopwords', quiet=True)
-        stop_words = set(stopwords.words('portuguese'))
-        stop_words.update(ADDITIONAL_STOP_WORDS)
-        
-        if custom_stop_words:
-            stop_words.update(custom_stop_words)
-            
-    except Exception as e:
-        print(f"Error loading stopwords: {e}")
-        stop_words = set()
-    
+    stop_words = set(PORTUGUESE_STOPWORDS)
+    stop_words.update(ADDITIONAL_STOP_WORDS)
+
+    if custom_stop_words:
+        stop_words.update(custom_stop_words)
+
     return stop_words
 
 
