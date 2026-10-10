@@ -204,7 +204,7 @@ def _render_sankey_chart(
     assert result is not None
     st.session_state["sankey_nodes"] = result["nodes"]
     apply_native_label_styles(result["figure"], result["nodes"], style_state)
-    st.plotly_chart(result["figure"], use_container_width=True)
+    st.plotly_chart(result["figure"], width="stretch")
 
     st.subheader("Frequência de palavras")
     freq_df = create_word_frequency_dataframe(
@@ -212,7 +212,7 @@ def _render_sankey_chart(
         n_words=n_words,
         custom_stop_words=stop_words,
     )
-    st.dataframe(freq_df, use_container_width=True)
+    st.dataframe(freq_df, width="stretch")
     return True
 
 
@@ -343,7 +343,7 @@ if uploaded_files:
 
         st.dataframe(
             data_to_show,
-            use_container_width=True,
+            width="stretch",
             height=min(400, 35 * len(data_to_show) + 38),
             hide_index=False,
         )
@@ -601,10 +601,10 @@ if uploaded_files:
                     generate = st.button(
                         "Gerar gráfico de Sankey",
                         type="primary",
-                        use_container_width=True,
+                        width="stretch",
                     )
                 with btn_reset:
-                    if st.button("Resetar estilo", use_container_width=True):
+                    if st.button("Resetar estilo", width="stretch"):
                         st.session_state["sankey_style"] = (
                             reset_style_customizations(style_state)
                         )
