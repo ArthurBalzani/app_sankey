@@ -27,6 +27,7 @@ DEFAULT_N_WORDS = 20
 DEFAULT_OPACITY = 0.8
 DEFAULT_CHART_HEIGHT = 600
 DEFAULT_MAIN_NODE_COLOR = "#1f77b4"
+DEFAULT_QUESTION_NODE_COLOR = "#1f77b4"
 MIN_N_WORDS = 5
 MAX_N_WORDS = 50
 MIN_CHART_HEIGHT = 400
@@ -40,6 +41,23 @@ COLOR_PALETTES = [
     "YlOrRd", "YlGnBu", "PuRd", "RdPu", "Spectral", "RdYlBu"
 ]
 DEFAULT_COLOR_PALETTE = "Viridis"
+
+# Sankey label typography / side color defaults (native Plotly labels)
+SANKEY_FONT_FAMILIES = [
+    "Arial",
+    "Helvetica",
+    "Georgia",
+    "Times New Roman",
+    "Courier New",
+    "Verdana",
+    "Trebuchet MS",
+]
+DEFAULT_QUESTION_FONT = "Arial"
+DEFAULT_WORD_FONT = "Arial"
+DEFAULT_QUESTION_FONT_SIZE = 12
+DEFAULT_WORD_FONT_SIZE = 12
+DEFAULT_QUESTION_LABEL_COLOR = "#1f77b4"
+DEFAULT_WORD_LABEL_COLOR = "#2ca02c"
 
 # CSV related
 IGNORED_COLUMNS = 2  # First 2 columns are ignored
